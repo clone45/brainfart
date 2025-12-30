@@ -201,6 +201,10 @@ ENV HF_HOME=/app/.cache
 
 See [examples/bot.py](examples/bot.py) for a complete working bot.
 
+## Known Issues
+
+- **Redundant memories**: The extraction process may create duplicate or near-duplicate memories. Deduplication is not yet implemented.
+
 ## License
 
 BSD-2-Clause (same as Pipecat)
