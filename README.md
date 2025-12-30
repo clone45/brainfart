@@ -48,7 +48,6 @@ pipeline = Pipeline([
 - **Automatic embeddings** using all-MiniLM-L6-v2 (fast, ~90MB)
 - **Smart extraction** with Gemini Flash (extracts what's worth remembering)
 - **At-rest encryption** with Fernet (crash-safe, optional)
-- **Works offline** after first model download
 
 ## How it works
 
