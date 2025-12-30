@@ -201,6 +201,10 @@ ENV HF_HOME=/app/.cache
 
 See [examples/bot.py](examples/bot.py) for a complete working bot.
 
+## Tutorial
+
+For a detailed walkthrough of building a production memory system, including observability, custom extraction triggers, and lessons learned, see [docs/TUTORIAL.md](docs/TUTORIAL.md).
+
 ## Known Issues
 
 - **Redundant memories**: The extraction process may create duplicate or near-duplicate memories. Deduplication is not yet implemented.
