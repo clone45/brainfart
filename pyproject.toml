@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brainfart"
+version = "0.1.0"
+description = "Batteries-included memory for voice bots—FAISS + SQLite + embeddings + encryption in one pip install"
+readme = "README.md"
+license = "BSD-2-Clause"
+requires-python = ">=3.10"
+authors = [
+    {name = "R1N Interactive", email = "dev@r1n.ai"}
+]
+keywords = ["pipecat", "memory", "voice-ai", "faiss", "embeddings", "rag", "conversational-ai", "encryption", "brainfart"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+# Core dependencies - all included by default for "batteries-included" experience
+dependencies = [
+    "pipecat-ai>=0.0.67",
+    "faiss-cpu>=1.8.0,<2.0",
+    "sentence-transformers>=2.2.0,<4.0",
+    "google-generativeai>=0.8.0,<1.0",
+    "pydantic>=2.0.0,<3.0",
+    "pydantic-settings>=2.0.0,<3.0",
+    "aiosqlite>=0.19.0,<1.0",
+    "numpy>=1.21.0,<3.0",
+    "cryptography>=41.0.0,<44.0",
+    "loguru>=0.7.0,<1.0",
+]
+
+[project.optional-dependencies]
+# GPU acceleration (Linux only, user must have CUDA)
+gpu = [
+    "faiss-gpu-cu12>=1.13.0,<2.0; sys_platform == 'linux'",
+]
+
+# New Google GenAI SDK (for users who want the latest)
+genai = [
+    "google-genai>=1.0.0,<2.0",
+]
+
+# Development dependencies
+dev = [
+    "pytest>=7.0.0,<9.0",
+    "pytest-asyncio>=0.21.0,<1.0",
+    "pytest-cov>=4.0.0,<6.0",
+    "mypy>=1.0.0,<2.0",
+    "ruff>=0.1.0,<1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/r1n-ai/brainfart"
+Documentation = "https://github.com/r1n-ai/brainfart#readme"
+Repository = "https://github.com/r1n-ai/brainfart.git"
+"Bug Tracker" = "https://github.com/r1n-ai/brainfart/issues"
+Changelog = "https://github.com/r1n-ai/brainfart/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
