@@ -4,7 +4,7 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from pipecat_memory_local import LocalMemory, MemorySettings
+from brainfart import LocalMemory, MemorySettings
 
 
 @pytest.fixture
@@ -130,6 +130,7 @@ async def test_encryption(temp_dir):
     settings = MemorySettings(
         data_dir=temp_dir,
         encryption_key="test-secret-key",
+        similarity_threshold=0.5,
     )
 
     mem = LocalMemory(settings=settings, user_id="encrypt-test", agent_id="test")
