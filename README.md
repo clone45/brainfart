@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/brainfart)](https://pypi.org/project/brainfart)
 [![License](https://img.shields.io/badge/license-BSD--2--Clause-blue.svg)](LICENSE)
 
-**Batteries-included memory for voice bots. One pip install, zero config.**
+**Batteries-included memory for voice bots. One pip install, one env var, done.**
 
 FAISS vector search + SQLite storage + sentence-transformers embeddings + Gemini extraction + at-rest encryption—all bundled and ready to use.
 
