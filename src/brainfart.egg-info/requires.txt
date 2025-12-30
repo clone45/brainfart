@@ -1,0 +1,25 @@
+pipecat-ai>=0.0.67
+faiss-cpu<2.0,>=1.8.0
+sentence-transformers<4.0,>=2.2.0
+google-generativeai<1.0,>=0.8.0
+pydantic<3.0,>=2.0.0
+pydantic-settings<3.0,>=2.0.0
+aiosqlite<1.0,>=0.19.0
+numpy<3.0,>=1.21.0
+cryptography<44.0,>=41.0.0
+loguru<1.0,>=0.7.0
+
+[dev]
+pytest<9.0,>=7.0.0
+pytest-asyncio<1.0,>=0.21.0
+pytest-cov<6.0,>=4.0.0
+mypy<2.0,>=1.0.0
+ruff<1.0,>=0.1.0
+
+[genai]
+google-genai<2.0,>=1.0.0
+
+[gpu]
+
+[gpu:sys_platform == "linux"]
+faiss-gpu-cu12<2.0,>=1.13.0

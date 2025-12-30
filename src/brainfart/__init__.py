@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from .config import MemorySettings
     from .crypto import MemoryCrypto
     from .embeddings import EmbeddingService
-    from .extraction import extract_memories, extract_and_store
+    from .extraction import extract_memories, extract_and_store, ExtractionResult
 
 
 def __getattr__(name: str):
@@ -68,6 +68,10 @@ def __getattr__(name: str):
         from .extraction import extract_and_store
 
         return extract_and_store
+    if name == "ExtractionResult":
+        from .extraction import ExtractionResult
+
+        return ExtractionResult
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -82,6 +86,7 @@ def __dir__():
         "EmbeddingService",
         "extract_memories",
         "extract_and_store",
+        "ExtractionResult",
     ]
 
 
@@ -95,4 +100,5 @@ __all__ = [
     "EmbeddingService",
     "extract_memories",
     "extract_and_store",
+    "ExtractionResult",
 ]
