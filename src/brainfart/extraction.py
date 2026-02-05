@@ -192,7 +192,7 @@ async def extract_memories(
     start_time = time.perf_counter()
 
     if model_name is None:
-        model_name = os.getenv("BRAINFART_GEMINI_MODEL", "gemini-2.0-flash-lite")
+        model_name = os.getenv("BRAINFART_GEMINI_MODEL", "gemini-2.0-flash")
 
     # Get API key - explicit priority order
     key = api_key or os.getenv("BRAINFART_GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
