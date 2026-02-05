@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brainfart"
-version = "0.2.0"
+version = "0.4.0"
 description = "Batteries-included memory for voice bots—FAISS + SQLite + embeddings + encryption in one pip install"
 readme = "README.md"
 license = "BSD-2-Clause"
@@ -25,11 +25,12 @@ classifiers = [
 ]
 
 # Core dependencies - all included by default for "batteries-included" experience
+# Uses fastembed (ONNX-based) instead of sentence-transformers for ~4x smaller install
 dependencies = [
     "pipecat-ai>=0.0.67",
     "faiss-cpu>=1.8.0,<2.0",
-    "sentence-transformers>=2.2.0,<4.0",
-    "google-generativeai>=0.8.0,<1.0",
+    "fastembed>=0.4.0,<1.0",
+    "google-genai>=1.0.0,<2.0",
     "pydantic>=2.0.0,<3.0",
     "pydantic-settings>=2.0.0,<3.0",
     "aiosqlite>=0.19.0,<1.0",
@@ -44,9 +45,14 @@ gpu = [
     "faiss-gpu-cu12>=1.13.0,<2.0; sys_platform == 'linux'",
 ]
 
-# New Google GenAI SDK (for users who want the latest)
-genai = [
-    "google-genai>=1.0.0,<2.0",
+# Legacy google-generativeai SDK (for users with compatibility needs)
+legacy-genai = [
+    "google-generativeai>=0.8.0,<1.0",
+]
+
+# For users who prefer sentence-transformers (larger but more model options)
+transformers = [
+    "sentence-transformers>=2.2.0,<4.0",
 ]
 
 # Development dependencies

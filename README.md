@@ -6,7 +6,7 @@
 
 **Batteries-included memory for voice bots. One pip install, one env var, done.**
 
-FAISS vector search + SQLite storage + sentence-transformers embeddings + Gemini extraction + at-rest encryption—all bundled and ready to use.
+FAISS vector search + SQLite storage + fastembed embeddings + Gemini extraction + at-rest encryption—all bundled and ready to use.
 
 ## Quick Start
 
@@ -179,7 +179,7 @@ Memories are categorized for better retrieval:
 - **Subsequent imports**: <1 second (cached)
 - **Embedding**: ~7-8ms per text
 - **Retrieval**: ~1-2ms (excluding embedding)
-- **Install size**: ~500MB (mostly sentence-transformers/PyTorch)
+- **Install size**: ~150MB (uses fastembed/ONNX instead of PyTorch)
 
 ## Docker
 
@@ -191,10 +191,10 @@ FROM python:3.11-slim
 RUN pip install brainfart
 
 # Pre-download embedding model
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/all-MiniLM-L6-v2')"
 
-# Set cache location
-ENV HF_HOME=/app/.cache
+# Set cache location (fastembed uses ~/.cache/fastembed by default)
+ENV FASTEMBED_CACHE_PATH=/app/.cache/fastembed
 ```
 
 ## Full Example

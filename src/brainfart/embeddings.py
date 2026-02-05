@@ -1,7 +1,8 @@
 """
-Lazy-loaded sentence-transformers embeddings.
+Lazy-loaded embeddings using fastembed (ONNX-based).
 
-The model (~85MB) is loaded once and reused for all operations.
+Uses fastembed instead of sentence-transformers for ~4x smaller install size.
+The model (~90MB) is loaded once and reused for all operations.
 All operations are async-safe via thread pool execution.
 """
 
@@ -12,12 +13,32 @@ import numpy as np
 from loguru import logger
 
 
+# Model name mapping: short name -> fastembed full name
+MODEL_ALIASES = {
+    "all-MiniLM-L6-v2": "sentence-transformers/all-MiniLM-L6-v2",
+    "all-mpnet-base-v2": "sentence-transformers/all-mpnet-base-v2",
+    "bge-small-en-v1.5": "BAAI/bge-small-en-v1.5",
+    "bge-base-en-v1.5": "BAAI/bge-base-en-v1.5",
+}
+
+# Known dimensions for common models
+MODEL_DIMENSIONS = {
+    "sentence-transformers/all-MiniLM-L6-v2": 384,
+    "sentence-transformers/all-mpnet-base-v2": 768,
+    "BAAI/bge-small-en-v1.5": 384,
+    "BAAI/bge-base-en-v1.5": 768,
+}
+
+
 class EmbeddingService:
     """
-    Singleton embedding service using sentence-transformers.
+    Singleton embedding service using fastembed (ONNX runtime).
 
     The model is loaded lazily on first use and cached globally.
     First run downloads the model (~90MB), subsequent runs use cache.
+
+    Uses ONNX runtime instead of PyTorch for ~4x smaller install size
+    while maintaining the same embedding quality.
 
     Usage:
         service = EmbeddingService()  # Uses default model
@@ -34,10 +55,12 @@ class EmbeddingService:
         Initialize the embedding service.
 
         Args:
-            model_name: Sentence-transformers model name.
+            model_name: Model name. Can be a short alias (e.g., "all-MiniLM-L6-v2")
+                       or full fastembed name (e.g., "sentence-transformers/all-MiniLM-L6-v2").
                        Default is all-MiniLM-L6-v2 (fast, 384 dimensions).
         """
-        self._requested_model = model_name
+        # Resolve alias to full name
+        self._requested_model = MODEL_ALIASES.get(model_name, model_name)
 
     @property
     def model(self):
@@ -49,14 +72,14 @@ class EmbeddingService:
             logger.info(f"Loading embedding model '{self._requested_model}'...")
             logger.info("(First run may download ~90MB model, cached for future use)")
 
-            from sentence_transformers import SentenceTransformer
+            from fastembed import TextEmbedding
 
-            EmbeddingService._model = SentenceTransformer(self._requested_model)
+            EmbeddingService._model = TextEmbedding(model_name=self._requested_model)
             EmbeddingService._model_name = self._requested_model
-            EmbeddingService._dimension = EmbeddingService._model.get_sentence_embedding_dimension()
+            EmbeddingService._dimension = MODEL_DIMENSIONS.get(self._requested_model, 384)
 
             logger.info(
-                f"Embedding model loaded: {EmbeddingService._dimension} dimensions"
+                f"Embedding model loaded: {EmbeddingService._dimension} dimensions (fastembed/ONNX)"
             )
 
         return EmbeddingService._model
@@ -73,11 +96,12 @@ class EmbeddingService:
         Embed a single text string.
 
         Returns normalized embedding vector.
-        Runs in thread pool since sentence-transformers is synchronous.
+        Runs in thread pool since fastembed is synchronous.
         """
         model = self.model
+        # fastembed returns a generator, convert to numpy array
         embedding = await asyncio.to_thread(
-            model.encode, text, normalize_embeddings=True
+            lambda: np.array(list(model.embed([text]))[0], dtype=np.float32)
         )
         return embedding
 
@@ -91,20 +115,21 @@ class EmbeddingService:
             return np.array([])
 
         model = self.model
+        # fastembed returns a generator, convert to numpy array
         embeddings = await asyncio.to_thread(
-            model.encode, texts, normalize_embeddings=True, show_progress_bar=False
+            lambda: np.array(list(model.embed(texts)), dtype=np.float32)
         )
         return embeddings
 
     def embed_sync(self, text: str) -> np.ndarray:
         """Synchronous embedding (for non-async contexts)."""
-        return self.model.encode(text, normalize_embeddings=True)
+        return np.array(list(self.model.embed([text]))[0], dtype=np.float32)
 
     def embed_batch_sync(self, texts: List[str]) -> np.ndarray:
         """Synchronous batch embedding (for non-async contexts)."""
         if not texts:
             return np.array([])
-        return self.model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
+        return np.array(list(self.model.embed(texts)), dtype=np.float32)
 
     @classmethod
     def is_loaded(cls) -> bool:

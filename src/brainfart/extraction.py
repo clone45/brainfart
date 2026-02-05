@@ -8,14 +8,26 @@ Expected behavior:
 - 70-80% of calls return empty list (nothing memorable)
 - Tool only called when genuine facts are present
 - Empty result = nothing memorable = common case
+
+Note: Uses the google-genai SDK (not the deprecated google-generativeai).
 """
 
+import asyncio
 import os
 import time
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, List, Optional, Union
 
 from loguru import logger
+
+# Import the new Google GenAI SDK
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
+    logger.warning("google-genai not installed - memory extraction disabled")
 
 
 @dataclass
@@ -93,65 +105,63 @@ Importance scale (1-5):
 """
 
 
-def _get_store_memories_tool():
-    """Build the tool definition for memory extraction."""
-    import google.generativeai as genai
+def _get_store_memories_tool_declaration() -> dict:
+    """Build the tool declaration dictionary for memory extraction.
 
-    return genai.protos.Tool(
-        function_declarations=[
-            genai.protos.FunctionDeclaration(
-                name="store_memories",
-                description=(
-                    "Store memorable facts about the user. "
-                    "Only call this if there are facts worth remembering. "
-                    "Most conversations have nothing memorable — that's fine, "
-                    "just don't call this tool."
-                ),
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
-                    properties={
-                        "memories": genai.protos.Schema(
-                            type=genai.protos.Type.ARRAY,
-                            items=genai.protos.Schema(
-                                type=genai.protos.Type.OBJECT,
-                                properties={
-                                    "content": genai.protos.Schema(
-                                        type=genai.protos.Type.STRING,
-                                        description=(
-                                            "The fact in third person, e.g. "
-                                            "'User's brother Mike works at Google'"
-                                        ),
-                                    ),
-                                    "category": genai.protos.Schema(
-                                        type=genai.protos.Type.STRING,
-                                        enum=[
-                                            "identity",
-                                            "preference",
-                                            "context",
-                                            "relationship",
-                                            "surprise",
-                                        ],
-                                        description=(
-                                            "identity=core facts, preference=likes/dislikes, "
-                                            "context=current projects/problems, "
-                                            "relationship=emotional moments, "
-                                            "surprise=unusual/noteworthy"
-                                        ),
-                                    ),
-                                    "importance": genai.protos.Schema(
-                                        type=genai.protos.Type.INTEGER,
-                                        description="1-5 scale: 5=core identity, 1=minor detail",
-                                    ),
-                                },
-                                required=["content", "category", "importance"],
-                            ),
-                        ),
+    Uses simple dictionary format compatible with google-genai SDK.
+    """
+    return {
+        "name": "store_memories",
+        "description": (
+            "Store memorable facts about the user. "
+            "Only call this if there are facts worth remembering. "
+            "Most conversations have nothing memorable — that's fine, "
+            "just don't call this tool."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "memories": {
+                    "type": "array",
+                    "description": "List of memorable facts to store",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "content": {
+                                "type": "string",
+                                "description": (
+                                    "The fact in third person, e.g. "
+                                    "'User's brother Mike works at Google'"
+                                ),
+                            },
+                            "category": {
+                                "type": "string",
+                                "enum": [
+                                    "identity",
+                                    "preference",
+                                    "context",
+                                    "relationship",
+                                    "surprise",
+                                ],
+                                "description": (
+                                    "identity=core facts, preference=likes/dislikes, "
+                                    "context=current projects/problems, "
+                                    "relationship=emotional moments, "
+                                    "surprise=unusual/noteworthy"
+                                ),
+                            },
+                            "importance": {
+                                "type": "integer",
+                                "description": "1-5 scale: 5=core identity, 1=minor detail",
+                            },
+                        },
+                        "required": ["content", "category", "importance"],
                     },
-                    required=["memories"],
-                ),
-            ),
-        ],
-    )
+                },
+            },
+            "required": ["memories"],
+        },
+    }
 
 
 async def extract_memories(
@@ -169,6 +179,9 @@ async def extract_memories(
     """
     Extract memories from a conversation window using Gemini tool calling.
 
+    Uses the google-genai SDK with explicit client creation to avoid
+    credential conflicts with other Google services.
+
     Args:
         messages: List of message dicts with 'role' and 'content' keys
         model_name: Gemini model to use (default: gemini-2.0-flash-lite)
@@ -183,31 +196,33 @@ async def extract_memories(
         List of memory dicts with keys: content, category, importance
         Empty list if nothing memorable (common case).
     """
-    import asyncio
-
-    import google.generativeai as genai
+    if not GENAI_AVAILABLE:
+        logger.warning("google-genai not available for memory extraction")
+        return []
 
     start_time = time.perf_counter()
 
     if model_name is None:
         model_name = os.getenv("BRAINFART_GEMINI_MODEL", "gemini-2.0-flash-lite")
 
-    # Configure API key
+    # Get API key - explicit priority order
     key = api_key or os.getenv("BRAINFART_GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if key:
-        genai.configure(api_key=key)
-    else:
+    if not key:
         logger.warning("No Gemini API key found for memory extraction")
         return []
 
-    # Format conversation
+    # Format conversation for the prompt
     conversation = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in messages)
 
-    # Create model with tool
-    model = genai.GenerativeModel(
-        model_name,
-        tools=[_get_store_memories_tool()],
+    # Build the tool configuration
+    tool_declaration = _get_store_memories_tool_declaration()
+    tools = genai_types.Tool(function_declarations=[tool_declaration])
+
+    # Build generation config with system instruction and tools
+    config = genai_types.GenerateContentConfig(
         system_instruction=EXTRACTION_SYSTEM_PROMPT,
+        tools=[tools],
+        temperature=0.3,
     )
 
     # Track extraction metadata for callback
@@ -219,9 +234,15 @@ async def extract_memories(
     error_message = None
 
     try:
-        response = await model.generate_content_async(
-            f"Analyze this conversation for memorable facts:\n\n{conversation}",
-            generation_config=genai.GenerationConfig(temperature=0.3),
+        # Create client with explicit API key - this isolates credentials
+        # from any service account credentials that may be in the environment
+        client = genai.Client(api_key=key)
+
+        # Make the async generation request
+        response = await client.aio.models.generate_content(
+            model=model_name,
+            contents=f"Analyze this conversation for memorable facts:\n\n{conversation}",
+            config=config,
         )
 
         # Check if model called the tool
@@ -243,24 +264,25 @@ async def extract_memories(
                     if hasattr(part, "text") and part.text:
                         raw_response_text = part.text
 
-                    if hasattr(part, "function_call") and part.function_call.name == "store_memories":
-                        tool_called = True
-                        # Extract structured memories from function call args
-                        args = dict(part.function_call.args)
-                        memories = args.get("memories", [])
+                    # Check for function call
+                    if hasattr(part, "function_call") and part.function_call:
+                        fc = part.function_call
+                        if fc.name == "store_memories":
+                            tool_called = True
+                            # Extract structured memories from function call args
+                            args = fc.args if hasattr(fc, "args") else {}
+                            memories = args.get("memories", [])
 
-                        # Convert proto objects to plain dicts if needed
-                        for m in memories:
-                            if hasattr(m, "items"):
-                                memories_result.append(dict(m))
-                            else:
-                                memories_result.append(
-                                    {
+                            # Convert to plain dicts
+                            for m in memories:
+                                if isinstance(m, dict):
+                                    memories_result.append({
                                         "content": str(m.get("content", "")),
                                         "category": str(m.get("category", "context")),
                                         "importance": int(m.get("importance", 3)),
-                                    }
-                                )
+                                    })
+                                elif hasattr(m, "items"):
+                                    memories_result.append(dict(m))
 
                 if memories_result:
                     status = "success"
