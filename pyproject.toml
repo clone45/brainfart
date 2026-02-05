@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brainfart"
-version = "0.4.0"
+version = "0.4.1"
 description = "Batteries-included memory for voice bots—FAISS + SQLite + embeddings + encryption in one pip install"
 readme = "README.md"
 license = "BSD-2-Clause"

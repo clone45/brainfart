@@ -168,6 +168,8 @@ async def extract_memories(
     trigger_message_count: Optional[int] = None,
     # Callback for observability
     on_complete: Optional[ExtractionCallback] = None,
+    # Custom system prompt
+    system_prompt: Optional[str] = None,
 ) -> List[dict]:
     """
     Extract memories from a conversation window using Gemini tool calling.
@@ -184,6 +186,7 @@ async def extract_memories(
         session_id: Optional session ID for logging/callbacks
         trigger_message_count: Optional message count when extraction was triggered
         on_complete: Optional callback called with ExtractionResult after extraction
+        system_prompt: Custom system prompt for extraction (default: EXTRACTION_SYSTEM_PROMPT)
 
     Returns:
         List of memory dicts with keys: content, category, importance
@@ -215,7 +218,7 @@ async def extract_memories(
             }
         ],
         "systemInstruction": {
-            "parts": [{"text": EXTRACTION_SYSTEM_PROMPT}]
+            "parts": [{"text": system_prompt or EXTRACTION_SYSTEM_PROMPT}]
         },
         "tools": [
             {
@@ -338,6 +341,7 @@ async def extract_and_store(
     memory: "LocalMemory",
     session_id: Optional[str] = None,
     turn_number: Optional[int] = None,
+    system_prompt: Optional[str] = None,
 ) -> int:
     """
     Extract memories and store them.
@@ -349,13 +353,14 @@ async def extract_and_store(
         memory: LocalMemory instance
         session_id: Optional session ID for tracking
         turn_number: Optional turn number for tracking
+        system_prompt: Custom system prompt for extraction
 
     Returns:
         Number of memories stored (0 if nothing memorable)
     """
     from .memory import LocalMemory
 
-    memories = await extract_memories(messages)
+    memories = await extract_memories(messages, system_prompt=system_prompt)
 
     if not memories:
         return 0
