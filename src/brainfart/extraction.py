@@ -1,5 +1,5 @@
 """
-Memory extraction using Gemini tool calling.
+Memory extraction using Gemini tool calling via REST API.
 
 Extracts memorable facts from conversation windows. Uses structured output
 via function calling for reliable parsing.
@@ -9,7 +9,8 @@ Expected behavior:
 - Tool only called when genuine facts are present
 - Empty result = nothing memorable = common case
 
-Note: Uses the google-genai SDK (not the deprecated google-generativeai).
+Note: Uses direct REST API calls via httpx to avoid gRPC credential conflicts
+with service account credentials (GOOGLE_APPLICATION_CREDENTIALS).
 """
 
 import asyncio
@@ -18,16 +19,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, List, Optional, Union
 
+import httpx
 from loguru import logger
-
-# Import the new Google GenAI SDK
-try:
-    from google import genai
-    from google.genai import types as genai_types
-    GENAI_AVAILABLE = True
-except ImportError:
-    GENAI_AVAILABLE = False
-    logger.warning("google-genai not installed - memory extraction disabled")
 
 
 @dataclass
@@ -108,7 +101,7 @@ Importance scale (1-5):
 def _get_store_memories_tool_declaration() -> dict:
     """Build the tool declaration dictionary for memory extraction.
 
-    Uses simple dictionary format compatible with google-genai SDK.
+    Uses the Gemini API function declaration format.
     """
     return {
         "name": "store_memories",
@@ -179,8 +172,8 @@ async def extract_memories(
     """
     Extract memories from a conversation window using Gemini tool calling.
 
-    Uses the google-genai SDK with explicit client creation to avoid
-    credential conflicts with other Google services.
+    Uses the Gemini REST API directly via httpx to avoid gRPC credential
+    conflicts with service account credentials.
 
     Args:
         messages: List of message dicts with 'role' and 'content' keys
@@ -196,10 +189,6 @@ async def extract_memories(
         List of memory dicts with keys: content, category, importance
         Empty list if nothing memorable (common case).
     """
-    if not GENAI_AVAILABLE:
-        logger.warning("google-genai not available for memory extraction")
-        return []
-
     start_time = time.perf_counter()
 
     if model_name is None:
@@ -214,16 +203,29 @@ async def extract_memories(
     # Format conversation for the prompt
     conversation = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in messages)
 
-    # Build the tool configuration
-    tool_declaration = _get_store_memories_tool_declaration()
-    tools = genai_types.Tool(function_declarations=[tool_declaration])
+    # Build the REST API request
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
 
-    # Build generation config with system instruction and tools
-    config = genai_types.GenerateContentConfig(
-        system_instruction=EXTRACTION_SYSTEM_PROMPT,
-        tools=[tools],
-        temperature=0.3,
-    )
+    # Build request payload with tool declaration
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": f"Analyze this conversation for memorable facts:\n\n{conversation}"}],
+            }
+        ],
+        "systemInstruction": {
+            "parts": [{"text": EXTRACTION_SYSTEM_PROMPT}]
+        },
+        "tools": [
+            {
+                "functionDeclarations": [_get_store_memories_tool_declaration()]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.3,
+        },
+    }
 
     # Track extraction metadata for callback
     memories_result = []
@@ -234,43 +236,45 @@ async def extract_memories(
     error_message = None
 
     try:
-        # Create client with explicit API key - this isolates credentials
-        # from any service account credentials that may be in the environment
-        client = genai.Client(api_key=key)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                params={"key": key},
+                json=payload,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            result = response.json()
 
-        # Make the async generation request
-        response = await client.aio.models.generate_content(
-            model=model_name,
-            contents=f"Analyze this conversation for memorable facts:\n\n{conversation}",
-            config=config,
-        )
-
-        # Check if model called the tool
-        if not response.candidates:
+        # Parse the response
+        candidates = result.get("candidates", [])
+        if not candidates:
             status = "no_memories"
         else:
-            candidate = response.candidates[0]
+            candidate = candidates[0]
 
             # Capture finish reason
-            if hasattr(candidate, "finish_reason"):
-                finish_reason = str(candidate.finish_reason)
+            finish_reason = candidate.get("finishReason")
 
-            if not candidate.content or not candidate.content.parts:
+            content = candidate.get("content", {})
+            parts = content.get("parts", [])
+
+            if not parts:
                 status = "no_memories"
             else:
                 # Look for function call in response
-                for part in candidate.content.parts:
+                for part in parts:
                     # Capture any text response
-                    if hasattr(part, "text") and part.text:
-                        raw_response_text = part.text
+                    if "text" in part:
+                        raw_response_text = part["text"]
 
                     # Check for function call
-                    if hasattr(part, "function_call") and part.function_call:
-                        fc = part.function_call
-                        if fc.name == "store_memories":
+                    if "functionCall" in part:
+                        fc = part["functionCall"]
+                        if fc.get("name") == "store_memories":
                             tool_called = True
                             # Extract structured memories from function call args
-                            args = fc.args if hasattr(fc, "args") else {}
+                            args = fc.get("args", {})
                             memories = args.get("memories", [])
 
                             # Convert to plain dicts
@@ -281,14 +285,16 @@ async def extract_memories(
                                         "category": str(m.get("category", "context")),
                                         "importance": int(m.get("importance", 3)),
                                     })
-                                elif hasattr(m, "items"):
-                                    memories_result.append(dict(m))
 
                 if memories_result:
                     status = "success"
                     elapsed_ms = (time.perf_counter() - start_time) * 1000
                     logger.info(f"Extracted {len(memories_result)} memories ({elapsed_ms:.0f}ms)")
 
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Memory extraction HTTP error: {e.response.status_code} - {e.response.text}")
+        status = "error"
+        error_message = f"HTTP {e.response.status_code}: {e.response.text}"
     except Exception as e:
         logger.error(f"Memory extraction failed: {e}")
         status = "error"

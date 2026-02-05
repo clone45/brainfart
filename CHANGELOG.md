@@ -8,11 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.0] - 2025-02-04
 
 ### Changed
-- **BREAKING**: Switched from deprecated `google-generativeai` to `google-genai` SDK
-  - Fixes credential conflicts with service account credentials (GOOGLE_CREDENTIALS_JSON)
-  - Uses explicit `genai.Client(api_key=...)` for proper credential isolation
+- **BREAKING**: Switched from `google-generativeai` SDK to direct REST API via httpx
+  - Completely eliminates gRPC credential conflicts with service account credentials
+  - No SDK dependency conflicts - uses simple HTTP calls
   - Uses dictionary-based tool definitions instead of proto objects
   - API unchanged - existing code works without modification
+- Replaced `google-generativeai` dependency with `httpx`
 
 ### Added
 - Optional `[legacy-genai]` extra for users who need the old google-generativeai SDK
