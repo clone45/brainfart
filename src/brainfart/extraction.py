@@ -52,6 +52,11 @@ class ExtractionResult:
     raw_response_text: Optional[str] = None
     finish_reason: Optional[str] = None
 
+    # Token usage from usageMetadata
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
     # Error info (if status == "error")
     error_message: Optional[str] = None
 
@@ -237,6 +242,9 @@ async def extract_memories(
     raw_response_text = None
     finish_reason = None
     error_message = None
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
 
     try:
         async with httpx.AsyncClient() as client:
@@ -248,6 +256,12 @@ async def extract_memories(
             )
             response.raise_for_status()
             result = response.json()
+
+        # Extract token usage metadata
+        usage = result.get("usageMetadata", {})
+        prompt_tokens = usage.get("promptTokenCount", 0)
+        completion_tokens = usage.get("candidatesTokenCount", 0)
+        total_tokens = usage.get("totalTokenCount", 0)
 
         # Parse the response
         candidates = result.get("candidates", [])
@@ -318,6 +332,9 @@ async def extract_memories(
             tool_called=tool_called,
             raw_response_text=raw_response_text,
             finish_reason=finish_reason,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
             error_message=error_message,
             user_id=user_id,
             agent_id=agent_id,
